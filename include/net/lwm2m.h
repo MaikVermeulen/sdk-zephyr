@@ -66,6 +66,36 @@
 
 typedef void (*lwm2m_socket_fault_cb_t)(int error);
 
+struct lwm2m_obj_path {
+	uint16_t obj_id;
+	uint16_t obj_inst_id;
+	uint16_t res_id;
+	uint16_t res_inst_id;
+	uint8_t  level;  /* 0/1/2/3/4 (4 = resource instance) */
+};
+
+/**
+ * @brief Observe callback events
+ */
+enum lwm2m_observe_event {
+	LWM2M_OBSERVE_EVENT_OBSERVER_ADDED,
+	LWM2M_OBSERVE_EVENT_OBSERVER_REMOVED,
+	LWM2M_OBSERVE_EVENT_NOTIFY_ACK,
+	LWM2M_OBSERVE_EVENT_NOTIFY_TIMEOUT,
+};
+
+/**
+ * @brief Observe callback indicating observer adds and deletes, and
+ * 	  notification ACKs and timeouts
+ *
+ * @param[in] event Observer add/delete or notification ack/timeout
+ * @param[in] path LwM2M path
+ * @param[in] user_data Pointer to user_data buffer, as provied in
+ * 			send_notify_message(). Used to determine for which
+ *			data the ACKed/timed out notification was.
+ */
+typedef void (*lwm2m_observe_cb_t)(enum lwm2m_observe_event event, struct lwm2m_obj_path *path, void *user_data);
+
 /**
  * @brief LwM2M context structure to maintain information for a single
  * LwM2M connection.
@@ -124,6 +154,11 @@ struct lwm2m_ctx {
 	 *  callback in case of socket errors on receive.
 	 */
 	lwm2m_socket_fault_cb_t fault_cb;
+
+	/** Callback for new or cancelled observations, and acknowledged or timed
+	 *  out notifications.
+	 */
+	lwm2m_observe_cb_t observe_cb;
 
 	/** Validation buffer. Used as a temporary buffer to decode the resource
 	 *  value before validation. On successful validation, its content is
@@ -1008,9 +1043,13 @@ typedef void (*lwm2m_ctx_event_cb_t)(struct lwm2m_ctx *ctx,
  * @param[in] ep_name Registered endpoint name
  * @param[in] flags Flags used to configure current LwM2M session.
  * @param[in] event_cb Client event callback function
+ * @param[in] observe_cb Observe callback function called when an observer was
+ *			 added or deleted, and when a notification was acked or
+ *			 has timed out
  */
 void lwm2m_rd_client_start(struct lwm2m_ctx *client_ctx, const char *ep_name,
-			   uint32_t flags, lwm2m_ctx_event_cb_t event_cb);
+			   uint32_t flags, lwm2m_ctx_event_cb_t event_cb,
+			   lwm2m_observe_cb_t observe_cb);
 
 /**
  * @brief Stop the LwM2M RD (De-register) Client
@@ -1027,6 +1066,30 @@ void lwm2m_rd_client_start(struct lwm2m_ctx *client_ctx, const char *ep_name,
  */
 void lwm2m_rd_client_stop(struct lwm2m_ctx *client_ctx,
 			  lwm2m_ctx_event_cb_t event_cb, bool deregister);
+
+/**
+ * @brief Helper function to print path objects' contents to log
+ *
+ * @param[in] buf The buffer to use for formatting the string
+ * @param[in] path The path to stringify
+ */
+char *lwm2m_path_log_strdup(char *buf, struct lwm2m_obj_path *path);
+
+/**
+ * @brief Send a notification that traces back to some user data
+ *
+ * In the case of e.g. buffering, the user may want to send notifications
+ * for specific data, like buffered measurements. This function lets the
+ * user trigger a notification, which can be traced back to such a
+ * buffered measurement using a provided pointer. This pointer is provided
+ * back to the user in the lwm2m_observe_cb_t as well, so that ACKs and timeouts
+ * can be traced back to the specific data that was contained in that
+ * notification.
+ *
+ * @param[in] path Path for which to send the notification
+ * @param[in] user_data Pointer to user data, e.g. stored measurement
+ */
+int send_notify_message (struct lwm2m_obj_path *path, void *user_data);
 
 #endif	/* ZEPHYR_INCLUDE_NET_LWM2M_H_ */
 /**@}  */
