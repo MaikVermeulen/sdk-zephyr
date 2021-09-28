@@ -1033,6 +1033,35 @@ static void lwm2m_rd_client_service(struct k_work *work)
 	}
 }
 
+#include "lwm2m_object.h"
+static void observe_cb (enum lwm2m_observe_event event, void *pathy)
+{
+  #define LWM2M_MAX_PATH_STR_LEN sizeof("65535/65535/65535/65535")
+  char buf[LWM2M_MAX_PATH_STR_LEN];
+
+  struct lwm2m_obj_path *path = pathy;
+
+  switch (event)
+  {
+    case LWM2M_OBSERVE_EVENT_OBSERVER_ADDED:
+    LOG_ERR("Observer added for path %s", lwm2m_path_log_strdup(buf, path));
+    break;
+    case LWM2M_OBSERVE_EVENT_OBSERVER_REMOVED:
+    LOG_ERR("Observer removed for path %s", lwm2m_path_log_strdup(buf, path));
+    break;
+    case LWM2M_OBSERVE_EVENT_NOTIFY_ACK:
+    LOG_ERR("Notify ack for path %s", lwm2m_path_log_strdup(buf, path));
+    break;
+    case LWM2M_OBSERVE_EVENT_NOTIFY_TIMEOUT:
+    LOG_ERR("Notify timeout for path %s", lwm2m_path_log_strdup(buf, path));
+    break;
+
+    default:
+    LOG_ERR("Unknown observe event for path %s", lwm2m_path_log_strdup(buf, path));
+    break;
+  }
+}
+
 void lwm2m_rd_client_start(struct lwm2m_ctx *client_ctx, const char *ep_name,
 			   uint32_t flags, lwm2m_ctx_event_cb_t event_cb)
 {
@@ -1046,6 +1075,7 @@ void lwm2m_rd_client_start(struct lwm2m_ctx *client_ctx, const char *ep_name,
 	client.ctx = client_ctx;
 	client.ctx->sock_fd = -1;
 	client.ctx->fault_cb = socket_fault_cb;
+        client.ctx->observe_cb = observe_cb;
 	client.event_cb = event_cb;
 	client.use_bootstrap = flags & LWM2M_RD_CLIENT_FLAG_BOOTSTRAP;
 

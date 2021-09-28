@@ -521,6 +521,8 @@ static int engine_add_observer(struct lwm2m_message *msg,
 		log_strdup(sprint_token(token, tkl)),
 		log_strdup(lwm2m_sprint_ip_addr(&msg->ctx->remote_addr)));
 
+        msg->ctx->observe_cb(LWM2M_OBSERVE_EVENT_OBSERVER_ADDED, &msg->path);
+
 	return 0;
 }
 
@@ -553,6 +555,8 @@ static int engine_remove_observer(const uint8_t *token, uint8_t tkl)
 	(void)memset(found_obj, 0, sizeof(*found_obj));
 
 	LOG_DBG("observer '%s' removed", log_strdup(sprint_token(token, tkl)));
+
+        obs->ctx->observe_cb(LWM2M_OBSERVE_EVENT_OBSERVER_REMOVED, &obs->path);
 
 	return 0;
 }
@@ -4318,6 +4322,21 @@ static int notify_message_reply_cb(const struct coap_packet *response,
 		COAP_RESPONSE_CODE_DETAIL(code),
 		log_strdup(sprint_token(reply->token, reply->tkl)));
 
+        /* Find the correct CTX */
+	struct observe_node *obs, *found_obj = NULL;
+
+	/* find the node index */
+	SYS_SLIST_FOR_EACH_CONTAINER(&engine_observer_list, obs, node) {
+          if (memcmp(obs->token, reply->token, reply->tkl) == 0) {
+            found_obj = obs;
+            break;
+          }
+	}
+
+	if (found_obj) {
+          obs->ctx->observe_cb(LWM2M_OBSERVE_EVENT_NOTIFY_ACK, &obs->path);
+        }
+
 	/* remove observer on COAP_TYPE_RESET */
 	if (type == COAP_TYPE_RESET) {
 		if (reply->tkl > 0) {
@@ -4331,6 +4350,19 @@ static int notify_message_reply_cb(const struct coap_packet *response,
 	}
 
 	return 0;
+}
+
+static void notify_message_timeout_cb(struct lwm2m_message *msg)
+{
+	//if (msg->ctx != NULL) {
+	//	struct lwm2m_ctx *client_ctx = msg->ctx;
+
+	//	if (client_ctx->notify_timeout_cb != NULL) {
+	//		client_ctx->notify_timeout_cb();
+	//	}
+	//}
+
+        msg->ctx->observe_cb(LWM2M_OBSERVE_EVENT_NOTIFY_TIMEOUT, &msg->path);
 }
 
 static int generate_notify_message(struct observe_node *obs,
@@ -4381,6 +4413,7 @@ static int generate_notify_message(struct observe_node *obs,
 	msg->token = obs->token;
 	msg->tkl = obs->tkl;
 	msg->reply_cb = notify_message_reply_cb;
+        msg->message_timeout_cb = notify_message_timeout_cb;
 	msg->out.out_cpkt = &msg->cpkt;
 
 	ret = lwm2m_init_message(msg);
