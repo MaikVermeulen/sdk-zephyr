@@ -1033,27 +1033,78 @@ static void lwm2m_rd_client_service(struct k_work *work)
 	}
 }
 
+/* Not even ashamed */
+#define TEST_MSG_LEN                16
+#define SIMULTANEOUS_NOTIFICATIONS  2
+
+static struct lwm2m_obj_path observe_path;
+static uint16_t test_id = 0;
+
+/* Simplpe test server to send some notifications with increasing ID */
+static void notification_test_service(struct k_work *work)
+{
+  for (uint8_t i = 0; i < SIMULTANEOUS_NOTIFICATIONS; i++)
+  {
+    test_id++;
+    char *p_test = k_malloc(TEST_MSG_LEN);
+    snprintk(p_test, TEST_MSG_LEN, "Notification %u", test_id);
+
+    /* Send notification with our user data to this observer */
+    send_notify_message(&observe_path, p_test);
+  }
+}
+
 #include "lwm2m_object.h"
-static void observe_cb (enum lwm2m_observe_event event, void *pathy)
+static void observe_cb (enum lwm2m_observe_event event, struct lwm2m_obj_path *path, void *user_data)
 {
   #define LWM2M_MAX_PATH_STR_LEN sizeof("65535/65535/65535/65535")
   char buf[LWM2M_MAX_PATH_STR_LEN];
 
-  struct lwm2m_obj_path *path = pathy;
-
   switch (event)
   {
     case LWM2M_OBSERVE_EVENT_OBSERVER_ADDED:
-    LOG_ERR("Observer added for path %s", lwm2m_path_log_strdup(buf, path));
+    {
+      LOG_ERR("Observer added for path %s", lwm2m_path_log_strdup(buf, path));
+
+      /* Send notification with our user data to this observer */
+      char *p_test = k_malloc(TEST_MSG_LEN);
+      snprintk(p_test, TEST_MSG_LEN, "Notification %u", test_id);
+      send_notify_message(path, p_test);
+
+      /* Add a simple periodic service to trigger some more notifications */
+      observe_path = *path;
+      lwm2m_engine_add_service(notification_test_service, 5000);
+    }
     break;
+
     case LWM2M_OBSERVE_EVENT_OBSERVER_REMOVED:
     LOG_ERR("Observer removed for path %s", lwm2m_path_log_strdup(buf, path));
     break;
+
     case LWM2M_OBSERVE_EVENT_NOTIFY_ACK:
-    LOG_ERR("Notify ack for path %s", lwm2m_path_log_strdup(buf, path));
+    {
+      LOG_ERR("Notify ack for path %s", lwm2m_path_log_strdup(buf, path));
+
+      if (user_data)
+      {
+        /* Print data that belongs to this ack */
+        LOG_ERR("User data: %s", log_strdup(user_data));
+        k_free(user_data);
+      }
+    }
     break;
+
     case LWM2M_OBSERVE_EVENT_NOTIFY_TIMEOUT:
-    LOG_ERR("Notify timeout for path %s", lwm2m_path_log_strdup(buf, path));
+    {
+      LOG_ERR("Notify timeout for path %s", lwm2m_path_log_strdup(buf, path));
+
+      if (user_data)
+      {
+        /* Print data that belongs to this ack */
+        LOG_ERR("User data: %s", log_strdup(user_data));
+        k_free(user_data);
+      }
+    }
     break;
 
     default:

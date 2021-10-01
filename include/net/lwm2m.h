@@ -71,8 +71,16 @@ enum lwm2m_observe_event {
         LWM2M_OBSERVE_EVENT_NOTIFY_TIMEOUT,
 };
 
+struct lwm2m_obj_path {
+	uint16_t obj_id;
+	uint16_t obj_inst_id;
+	uint16_t res_id;
+	uint16_t res_inst_id;
+	uint8_t  level;  /* 0/1/2/3/4 (4 = resource instance) */
+};
+
 typedef void (*lwm2m_socket_fault_cb_t)(int error);
-typedef void (*lwm2m_observe_cb_t)(enum lwm2m_observe_event event, void *path);
+typedef void (*lwm2m_observe_cb_t)(enum lwm2m_observe_event event, struct lwm2m_obj_path *path, void *user_data);
 
 /**
  * @brief LwM2M context structure to maintain information for a single
@@ -1038,6 +1046,9 @@ void lwm2m_rd_client_start(struct lwm2m_ctx *client_ctx, const char *ep_name,
  */
 void lwm2m_rd_client_stop(struct lwm2m_ctx *client_ctx,
 			  lwm2m_ctx_event_cb_t event_cb);
+
+
+int send_notify_message (struct lwm2m_obj_path *path, void *user_data);
 
 #endif	/* ZEPHYR_INCLUDE_NET_LWM2M_H_ */
 /**@}  */
