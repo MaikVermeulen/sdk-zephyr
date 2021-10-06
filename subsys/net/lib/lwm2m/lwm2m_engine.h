@@ -146,6 +146,4 @@ void lwm2m_socket_del(struct lwm2m_ctx *ctx);
 int  lwm2m_socket_start(struct lwm2m_ctx *client_ctx);
 int  lwm2m_parse_peerinfo(char *url, struct sockaddr *addr, bool *use_dtls);
 
-char *lwm2m_path_log_strdup(char *buf, struct lwm2m_obj_path *path);
-
 #endif /* LWM2M_ENGINE_H */

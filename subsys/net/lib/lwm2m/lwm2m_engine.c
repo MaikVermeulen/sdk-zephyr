@@ -521,7 +521,9 @@ static int engine_add_observer(struct lwm2m_message *msg,
 		log_strdup(sprint_token(token, tkl)),
 		log_strdup(lwm2m_sprint_ip_addr(&msg->ctx->remote_addr)));
 
-        msg->ctx->observe_cb(LWM2M_OBSERVE_EVENT_OBSERVER_ADDED, &msg->path, NULL);
+	if (msg->ctx->observe_cb) {
+		msg->ctx->observe_cb(LWM2M_OBSERVE_EVENT_OBSERVER_ADDED, &msg->path, NULL);
+	}
 
 	return 0;
 }
@@ -556,7 +558,9 @@ static int engine_remove_observer(const uint8_t *token, uint8_t tkl)
 
 	LOG_DBG("observer '%s' removed", log_strdup(sprint_token(token, tkl)));
 
-        obs->ctx->observe_cb(LWM2M_OBSERVE_EVENT_OBSERVER_REMOVED, &obs->path, NULL);
+	if (msg->ctx->observe_cb) {
+		obs->ctx->observe_cb(LWM2M_OBSERVE_EVENT_OBSERVER_REMOVED, &obs->path, NULL);
+	}
 
 	return 0;
 }
@@ -4156,7 +4160,7 @@ static void lwm2m_udp_receive(struct lwm2m_ctx *client_ctx,
 		if (reply && reply->user_data == (void *)COAP_REPLY_STATUS_ERROR) {
 			/* reset reply->user_data for next time */
 			reply->user_data = (void *)COAP_REPLY_STATUS_NONE;
-			LOG_ERR("reply %p NOT removed", reply);
+			LOG_DBG("reply %p NOT removed", reply);
 			return;
 		}
 
@@ -4327,15 +4331,17 @@ static int notify_message_reply_cb(const struct coap_packet *response,
 
 	/* find the node index */
 	SYS_SLIST_FOR_EACH_CONTAINER(&engine_observer_list, obs, node) {
-          if (memcmp(obs->token, reply->token, reply->tkl) == 0) {
-            found_obj = obs;
-            break;
-          }
+		if (memcmp(obs->token, reply->token, reply->tkl) == 0) {
+			found_obj = obs;
+			break;
+		}
 	}
 
 	if (found_obj) {
-          obs->ctx->observe_cb(LWM2M_OBSERVE_EVENT_NOTIFY_ACK, &obs->path, reply->user_data);
-        }
+		if (msg->ctx->observe_cb) {
+			obs->ctx->observe_cb(LWM2M_OBSERVE_EVENT_NOTIFY_ACK, &obs->path, reply->user_data);
+		}
+	}
 
 	/* remove observer on COAP_TYPE_RESET */
 	if (type == COAP_TYPE_RESET) {
@@ -4361,8 +4367,9 @@ static void notify_message_timeout_cb(struct lwm2m_message *msg)
 	//		client_ctx->notify_timeout_cb();
 	//	}
 	//}
-
-        msg->ctx->observe_cb(LWM2M_OBSERVE_EVENT_NOTIFY_TIMEOUT, &msg->path, msg->reply->user_data);
+	if (msg->ctx->observe_cb) {
+		msg->ctx->observe_cb(LWM2M_OBSERVE_EVENT_NOTIFY_TIMEOUT, &msg->path, msg->reply->user_data);
+	}
 }
 
 static int generate_notify_message(struct observe_node *obs,
@@ -4460,29 +4467,27 @@ cleanup:
 
 int send_notify_message (struct lwm2m_obj_path *path, void *user_data)
 {
-  /* Find the observe node if there is one */
-  struct observe_node *obs, *found_obj = NULL;
+	/* Find the observe node if there is one */
+	struct observe_node *obs, *found_obj = NULL;
 
-  /* find the node index */
-  SYS_SLIST_FOR_EACH_CONTAINER(&engine_observer_list, obs, node) {
-    if (memcmp(path, &obs->path, sizeof(*path)) == 0) {
-            found_obj = obs;
-            break;
-    }
-  }
+	/* find the node index */
+	SYS_SLIST_FOR_EACH_CONTAINER(&engine_observer_list, obs, node) {
+		if (memcmp(path, &obs->path, sizeof(*path)) == 0) {
+			found_obj = obs;
+			break;
+		}
+	}
 
-  char buf[LWM2M_MAX_PATH_STR_LEN];
+	char buf[LWM2M_MAX_PATH_STR_LEN];
 
-  if (!found_obj) {
-    LOG_ERR("Couldn't find observer for path %s", lwm2m_path_log_strdup(buf, path));
-    return -ENOENT;
-  }
+	if (!found_obj) {
+		LOG_ERR("Couldn't find observer for path %s", lwm2m_path_log_strdup(buf, path));
+		return -ENOENT;
+	}
 
-  LOG_INF("Sending notification for path %s", lwm2m_path_log_strdup(buf, path));
+	LOG_INF("Sending notification for path %s", lwm2m_path_log_strdup(buf, path));
 
-  generate_notify_message(obs, true, user_data);
-
-  return 0;
+	return generate_notify_message(obs, true, user_data);
 }
 
 int32_t engine_next_service_timeout_ms(uint32_t max_timeout)
