@@ -3996,7 +3996,7 @@ static int handle_request(struct coap_packet *request,
 		case LWM2M_OP_DELETE:
 #if defined(CONFIG_LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP)
 			if (msg->ctx->bootstrap_mode) {
-				r = bootstrap_delete(msg);
+				//r = bootstrap_delete(msg);
 				break;
 			}
 #endif
